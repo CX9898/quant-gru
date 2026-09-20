@@ -12,6 +12,9 @@ on:
       - "example/**"
       - "pytorch/**"
       - "docker/Dockerfile"
+      - "docker/requirements.txt"
+      - "LICENSE"
+      - "README.md"
       - ".github/workflows/build-linux-cuda.yml"
   pull_request:
     paths:
@@ -21,6 +24,9 @@ on:
       - "example/**"
       - "pytorch/**"
       - "docker/Dockerfile"
+      - "docker/requirements.txt"
+      - "LICENSE"
+      - "README.md"
       - ".github/workflows/build-linux-cuda.yml"
   workflow_dispatch:
 
@@ -55,7 +61,8 @@ jobs:
         id: image
         run: |
           echo "repo=ghcr.io/$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')/cuda-pytorch-ci" >> "$GITHUB_OUTPUT"
-          echo "tag=py310-cu128-nightly" >> "$GITHUB_OUTPUT"
+          image_hash=$(sha256sum docker/Dockerfile docker/requirements.txt | sha256sum | cut -c1-12)
+          echo "tag=py310-cu128-${image_hash}" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GHCR
         uses: docker/login-action@v4
@@ -64,8 +71,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Pull prebuilt CI image
-        run: docker pull "${{ steps.image.outputs.repo }}:${{ steps.image.outputs.tag }}"
+      - name: Prepare CI image
+        run: |
+          image="${{ steps.image.outputs.repo }}:${{ steps.image.outputs.tag }}"
+          if ! docker pull "$image"; then
+            docker build -f docker/Dockerfile -t "$image" .
+          fi
 
       - name: Restore native build artifacts
         id: native-cache
@@ -106,10 +117,13 @@ jobs:
             "${{ steps.image.outputs.repo }}:${{ steps.image.outputs.tag }}" \
             bash -lc '
               set -euxo pipefail
+              ../build/gru_example --help
               rm -rf build dist *.egg-info
               rm -f ./*.so
               python -m pip install -e . --no-deps --no-build-isolation
               python -c "import quant_gru; print(\"Imported:\", quant_gru.__name__)"
+              python -m pip check
+              python example/example_usage.py --list
             '
 
       - name: Upload native build artifacts

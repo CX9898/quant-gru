@@ -11,10 +11,11 @@ ARG TZ=UTC
 ARG APT_MIRROR=
 ARG PIP_INDEX_URL=
 ARG PIP_TRUSTED_HOST=
-ARG PYTORCH_INDEX_URL=https://download.pytorch.org/whl/nightly/cu128
-ARG TORCH_PACKAGES="torch torchvision torchaudio"
+ARG PYTORCH_INDEX_URL=https://download.pytorch.org/whl/cu128
+ARG TORCH_PACKAGES="torch==2.9.1 torchvision==0.24.1 torchaudio==2.9.1"
 ARG INSTALL_TORCHCODEC=1
-ARG EXTRA_PYTHON_PACKAGES="numpy scipy pandas matplotlib tqdm tensorboard pyyaml soundfile librosa onnxscript safetensors pybind11"
+ARG TORCHCODEC_PACKAGE="torchcodec==0.9.1"
+ARG PYTHON_BUILD_TOOLS="pip==25.3 setuptools==80.9.0 wheel==0.45.1 build==1.3.0"
 ARG TORCH_CUDA_ARCH_LIST="6.0;7.0;7.5;8.0;8.6;8.9;9.0;12.0"
 
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -22,7 +23,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
     CUDA_HOME=/usr/local/cuda \
     PATH=/usr/local/cuda/bin:${PATH} \
-    LD_LIBRARY_PATH=/usr/local/cuda/lib64:${LD_LIBRARY_PATH} \
+    LD_LIBRARY_PATH=/usr/local/cuda/lib64 \
     TORCH_CUDA_ARCH_LIST=${TORCH_CUDA_ARCH_LIST}
 
 # Optional Ubuntu mirror override for regions where the default archive is slow.
@@ -72,6 +73,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN ln -sf /usr/bin/python3 /usr/bin/python
 
+COPY docker/requirements.txt /tmp/quant-gru-requirements.txt
+
 RUN if [[ -n "${PIP_INDEX_URL}" ]]; then \
       python3 -m pip config set global.index-url "${PIP_INDEX_URL}"; \
     fi && \
@@ -79,12 +82,13 @@ RUN if [[ -n "${PIP_INDEX_URL}" ]]; then \
       python3 -m pip config set global.trusted-host "${PIP_TRUSTED_HOST}"; \
     fi
 
-RUN python3 -m pip install --upgrade pip setuptools wheel build && \
-    python3 -m pip install --no-cache-dir --pre ${TORCH_PACKAGES} --index-url ${PYTORCH_INDEX_URL} && \
+RUN python3 -m pip install --upgrade ${PYTHON_BUILD_TOOLS} && \
+    python3 -m pip install --no-cache-dir ${TORCH_PACKAGES} --index-url ${PYTORCH_INDEX_URL} && \
     if [[ "${INSTALL_TORCHCODEC}" == "1" ]]; then \
-        python3 -m pip install --no-cache-dir --pre torchcodec --index-url ${PYTORCH_INDEX_URL}; \
+        python3 -m pip install --no-cache-dir ${TORCHCODEC_PACKAGE} --index-url ${PYTORCH_INDEX_URL}; \
     fi && \
-    python3 -m pip install --no-cache-dir ${EXTRA_PYTHON_PACKAGES}
+    python3 -m pip install --no-cache-dir -r /tmp/quant-gru-requirements.txt && \
+    python3 -m pip check
 
 WORKDIR /workspace
 

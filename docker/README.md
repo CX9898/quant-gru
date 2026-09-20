@@ -11,10 +11,13 @@
 当前默认参数面向本仓库已验证的工具链：
 
 - Base image: `nvidia/cuda:12.8.0-cudnn-devel-ubuntu22.04`
-- PyTorch index: `https://download.pytorch.org/whl/nightly/cu128`
-- Torch packages: `torch torchvision torchaudio`
-- `torchcodec`: 默认安装
+- PyTorch index: `https://download.pytorch.org/whl/cu128`
+- Torch packages: `torch==2.9.1`, `torchvision==0.24.1`, `torchaudio==2.9.1`
+- `torchcodec`: 默认安装 `0.9.1`
 - `TORCH_CUDA_ARCH_LIST`: `6.0;7.0;7.5;8.0;8.6;8.9;9.0;12.0`
+
+通用 Python 工具的固定版本保存在 [requirements.txt](requirements.txt)。升级 PyTorch、
+CUDA 或 Python 依赖时同步更新该文件并重新执行构建验证。
 
 ## 预装工具
 
@@ -40,9 +43,10 @@
 - `PIP_INDEX_URL`: PyPI 镜像，例如 `https://pypi.tuna.tsinghua.edu.cn/simple`
 - `PIP_TRUSTED_HOST`: 配合自定义 PyPI 镜像使用
 - `PYTORCH_INDEX_URL`: PyTorch wheel 源
-- `TORCH_PACKAGES`: 要安装的 torch 系列包
+- `TORCH_PACKAGES`: 要安装的 torch 系列包及版本
 - `INSTALL_TORCHCODEC`: 是否安装 `torchcodec`，`1` 为安装，`0` 为跳过
-- `EXTRA_PYTHON_PACKAGES`: 额外 Python 包列表
+- `TORCHCODEC_PACKAGE`: 要安装的 `torchcodec` 版本
+- `PYTHON_BUILD_TOOLS`: pip、setuptools、wheel 和 build 的固定版本
 - `TORCH_CUDA_ARCH_LIST`: 默认 CUDA arch 列表
 
 ## 构建示例
@@ -89,6 +93,8 @@ docker run --rm -it \
 
 - service: `cuda-pytorch`
 - image: `cuda-pytorch-ci:cu128`
+
+Compose 配置只将仓库根目录挂载到 `/workspace`。
 
 启动示例：
 

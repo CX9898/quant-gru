@@ -23,7 +23,7 @@ services:
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
     
     volumes:
-      - ${HOME}:/workspace
+      - ..:/workspace
     
     working_dir: /workspace
     

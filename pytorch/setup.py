@@ -65,8 +65,8 @@ def ensure_prebuilt_shared_library():
     if not os.path.exists(SOURCE_LIB):
         raise RuntimeError(
             f'Prebuilt shared library not found: {SOURCE_LIB}. '
-            'Please build the C++ library first, for example: '
-            '`mkdir -p build && cd build && cmake .. && make -j$(nproc)`.'
+            'Please build the C++ library from the repository root first: '
+            '`cmake -S . -B build && cmake --build build --parallel`.'
         )
 
 

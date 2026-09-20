@@ -7,10 +7,12 @@ on:
       - master
     paths:
       - "docker/Dockerfile"
+      - "docker/requirements.txt"
       - ".github/workflows/docker-ci-image.yml"
   pull_request:
     paths:
       - "docker/Dockerfile"
+      - "docker/requirements.txt"
       - ".github/workflows/docker-ci-image.yml"
   workflow_dispatch:
 
@@ -30,6 +32,8 @@ jobs:
         id: image
         run: |
           echo "repo=ghcr.io/$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')/cuda-pytorch-ci" >> "$GITHUB_OUTPUT"
+          image_hash=$(sha256sum docker/Dockerfile docker/requirements.txt | sha256sum | cut -c1-12)
+          echo "tag=py310-cu128-${image_hash}" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -48,6 +52,8 @@ jobs:
         with:
           images: ${{ steps.image.outputs.repo }}
           tags: |
+            type=raw,value=${{ steps.image.outputs.tag }}
+            type=raw,value=py310-cu128
             type=raw,value=py310-cu128-nightly
             type=raw,value=latest,enable={{is_default_branch}}
 

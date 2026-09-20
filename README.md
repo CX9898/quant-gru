@@ -23,13 +23,13 @@ QuantGRU 提供 PyTorch GRU(门控循环单元) 的高性能量化实现，基�
 [docker/README.md](docker/README.md)。
 
 源码构建需要 Linux、C++17 编译器、CMake 3.18 及以上版本、OpenMP、CUDA Toolkit
-和 CUDA 版 PyTorch。项目 wheel 构建流程使用 Python 3.10 至 3.12。编译工具链与
-PyTorch CUDA 版本保持兼容。
+和 CUDA 版 PyTorch。Python 构建使用 Python 3.10 至 3.12。编译工具链与 PyTorch
+CUDA 版本保持兼容。
 
 以下命令从本仓库根目录执行：
 
 ```bash
-cmake -S operators/quant-gru -B build -DCMAKE_BUILD_TYPE=Release
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel 2
 python3 -m pip install ./pytorch --no-deps --no-build-isolation
 ```
@@ -169,5 +169,8 @@ python3 pytorch/test_quant_gru.py
 | `pytorch/` | Python 模块、扩展 binding 与使用示例 |
 | [CHANGELOG.md](CHANGELOG.md) | 组件版本与迁移记录 |
 
-项目使用的 GRU 实现源自 [Haste](https://github.com/lmnt-com/haste)，并与
+## 许可证
+
+QuantGRU 使用 [Apache License 2.0](LICENSE)。项目包含源自
+[Haste](https://github.com/lmnt-com/haste) 的代码，并与
 [PyTorch GRU 接口](https://pytorch.org/docs/stable/generated/torch.nn.GRU.html) 集成。

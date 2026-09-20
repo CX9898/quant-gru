@@ -11,8 +11,6 @@
 
 /.vscode/
 
-/.github/
-
 /quantization_plots/
 
 /tools/
@@ -28,8 +26,13 @@
 *.whl
 *.egg-info
 */*build*/
+**/dist/
+**/.pytest_cache/
 /tmp/
 
 /release/
 
 __pycache__/
+
+/test_*_results.csv
+/test_*_results.txt
