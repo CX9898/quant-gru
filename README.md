@@ -147,12 +147,16 @@ gru.cuda()
 | `get_quant_config()`、`adjust_quant_config()` | 查询或调整指定算子的配置 |
 
 [示例脚本](pytorch/example/example_usage.py) 覆盖校准、QAT、双向计算、ONNX 导出和
-重载；[测试脚本](pytorch/test_quant_gru.py) 检查输出、梯度和误差阈值。命令从仓库根执行：
+重载；[测试脚本](pytorch/test_quant_gru.py) 检查输出、梯度和误差阈值；
+[Speech Commands 真实网络测试](tests/real_network/README.md) 比较 PyTorch FP32、
+Native CUDA FP32、INT8 QAT 和 INT16 QAT。命令从仓库根执行：
 
 ```bash
 python3 pytorch/example/example_usage.py --list
 python3 pytorch/example/example_usage.py -e basic
 python3 pytorch/test_quant_gru.py
+tests/real_network/run_speech_commands_gru_test.sh \
+  --dataset-root /path/to/speech_commands_v0.02
 ```
 
 示例脚本会捕获并打印异常，结果检查同时读取日志中的完成信息和错误信息。
@@ -164,6 +168,8 @@ python3 pytorch/test_quant_gru.py
 | --- | --- |
 | [pytorch/config/](pytorch/config/README.md) | JSON 字段、默认值和配置接口 |
 | [docs/GRU量化计算流程.md](docs/GRU量化计算流程.md) | 参数结构、逐算子公式、重缩放与 16 段 PWL |
+| [docs/research/](docs/research/speech-commands-gru-baseline.md) | 真实网络来源、适配边界和数据协议 |
+| [tests/real_network/](tests/real_network/README.md) | Speech Commands 四分支训练与量化精度回归 |
 | [quant-gru-cpu-only/](quant-gru-cpu-only/README.md) | 独立的 C++ CPU 定点参考实现 |
 | `include/`、`src/` | 主 C++/CUDA 计算、校准和 LUT 实现 |
 | `pytorch/` | Python 模块、扩展 binding 与使用示例 |
