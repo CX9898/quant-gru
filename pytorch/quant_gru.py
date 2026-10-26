@@ -1646,6 +1646,11 @@ class QuantGRU(nn.Module):
         Args:
             locked: True 锁定（禁止覆盖）；False 解锁（允许覆盖）
         """
+        # Resolve lazy mode/bitwidth changes while calibration data is still usable.
+        # Otherwise the next locked forward discards the dirty flag and executes
+        # with stale scales that cannot describe the runtime in public encodings.
+        if locked and not self._quant_params_locked:
+            _ensure_quant_params_fresh_for_export(self)
         self._quant_params_locked = bool(locked)
 
     def finalize_calibration(self, verbose: bool = False):
@@ -2162,13 +2167,23 @@ class QuantGRU(nn.Module):
         # 初始状态处理(统一接口)
         h0_forward, h0_reverse = self._parse_initial_state(hx, batch_size, device, to_cuda=True)
 
+        # eval 只切换模块模式，并不关闭 autograd。底层 is_training 在本接口中
+        # 控制门值缓存和 QAT mask 的写入；缺失它们会让 eval 反向读取未初始化数据。
+        # 公共 GRU 不启用 dropout/zoneout，保存缓存不改变前向数值；no_grad 推理仍不保存。
+        save_backward_state = self.training or (
+            torch.is_grad_enabled() and (
+                input.requires_grad or (hx is not None and hx.requires_grad)
+                or any(parameter.requires_grad for parameter in self.parameters())
+            )
+        )
+
         # 前向方向
         # LUT 现在存储在 quant_params 中，通过 setRescaleParam 复制到前向传播的 rescale 参数
         output_forward, h_n_forward = GRUFunction.apply(
             input, self.weight_ih_l0, self.weight_hh_l0,
             self.bias_ih_l0 if self.bias else None,
             self.bias_hh_l0 if self.bias else None,
-            h0_forward, self.training, self.use_quantization, self.quant_params, self.quant_storage_dtype)
+            h0_forward, save_backward_state, self.use_quantization, self.quant_params, self.quant_storage_dtype)
 
         # 反向方向(双向时)
         output_reverse, h_n_reverse = None, None
@@ -2178,7 +2193,7 @@ class QuantGRU(nn.Module):
                 input.flip(0), self.weight_ih_l0_reverse, self.weight_hh_l0_reverse,
                 self.bias_ih_l0_reverse if self.bias else None,
                 self.bias_hh_l0_reverse if self.bias else None,
-                h0_reverse, self.training, self.use_quantization, self.quant_params_reverse, self.quant_storage_dtype)
+                h0_reverse, save_backward_state, self.use_quantization, self.quant_params_reverse, self.quant_storage_dtype)
             # 反转反向输出以对齐时间步
             output_reverse = output_reverse.flip(0)
 
@@ -3396,7 +3411,21 @@ class QuantGRU(nn.Module):
         try:
             # 初始化 bitwidth_config 和 quant_params
             # gru_ops 已在模块顶部导入
+            # Compiler encodings carry standard scales, not execution metadata.
+            # As with QuantLSTM, all-Po2 grids select the shift execution mode.
+            scales = []
+            for direction in (operators, operators_reverse):
+                if direction:
+                    for record in direction.values():
+                        scale = record.get("scale", [])
+                        scales.extend(scale if isinstance(scale, list) else [scale])
+            use_pot2 = bool(scales) and all(
+                isinstance(scale, (int, float)) and scale > 0 and math.isfinite(scale)
+                and math.frexp(scale)[0] == 0.5 for scale in scales
+            )
             self._bitwidth_config = gru_ops.OperatorQuantConfig()
+            self._bitwidth_config.usePOT2_ = use_pot2
+            self._use_pot2_scale = use_pot2
             self.quant_params = gru_ops.GRUQuantParams()
             self.quant_params.hidden_ = self.hidden_size
             
