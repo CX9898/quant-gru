@@ -8,7 +8,7 @@
 
 ## 构建和运行
 
-环境需要 CMake 3.14 及以上版本和 C++17 编译器。以下命令从本仓库根目录执行：
+环境需要 CMake 3.14 及以上版本和 C++17 编译器。以下命令从 QuantGRU 目录执行：
 
 ```bash
 cmake -S quant-gru-cpu-only \

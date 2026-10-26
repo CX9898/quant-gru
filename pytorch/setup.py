@@ -22,7 +22,7 @@ VERSION_FILE = os.path.join(here, '_version.py')
 ENABLE_CUDA = os.environ.get('RX_MET_ENABLE_CUDA', '1') != '0'
 if not ENABLE_CUDA:
     SOURCE_LIB = os.path.join(os.environ.get('RX_MET_QUANT_GRU_BUILD_DIR',
-                             os.path.join(here, '../build-cpu')), SHARED_LIB_NAME)
+                             os.path.join(here, '../build_release')), SHARED_LIB_NAME)
 
 
 def read_version():
@@ -72,10 +72,8 @@ def ensure_prebuilt_shared_library():
     if not os.path.exists(SOURCE_LIB):
         raise RuntimeError(
             f'Prebuilt shared library not found: {SOURCE_LIB}. '
-            'Please build the C++ library from the repository root first: '
-            '`cmake -S . -B build && cmake --build build --parallel`. '
-            'For CPU builds, use `-DRX_MET_ENABLE_CUDA=OFF` and set '
-            'RX_MET_QUANT_GRU_BUILD_DIR to the CMake build directory.'
+            'Please build the C++ library first, for example: '
+            '`mkdir -p build && cd build && cmake .. && make -j$(nproc)`.'
         )
 
 
@@ -186,7 +184,7 @@ class BuildExtWithChecks(BuildExtension):
 
 
 onnx_root = os.environ.get('RX_MET_ONNXRUNTIME_ROOT', os.path.join(
-    here, '../third_party/onnxruntime'))
+    here, '../../../docker/environment/third_party/onnxruntime'))
 onnx_headers = os.environ.get('QUANT_GRU_ONNXRUNTIME_INCLUDE', os.path.join(onnx_root, 'include'))
 onnx_extensions = []
 if os.path.isfile(os.path.join(onnx_headers, 'onnxruntime_cxx_api.h')):

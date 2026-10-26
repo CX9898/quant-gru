@@ -19,14 +19,31 @@ QuantGRU 提供 PyTorch GRU(门控循环单元) 的高性能量化实现，基�
 
 ## 环境与安装
 
-本仓库提供独立源码构建和 CUDA/PyTorch 开发镜像，环境说明见
-[docker/README.md](docker/README.md)。
+QuantGRU 可从独立仓库或 rx-met 的 `operators/quant-gru` 目录构建。以下命令均从
+包含本 README 的 QuantGRU 目录执行。独立仓库的镜像说明位于 `docker/README.md`，
+rx-met 的发布镜像说明位于其仓库根目录的 `docker/README.md`。
 
 源码构建需要 Linux、C++17 编译器、CMake 3.18 及以上版本、OpenMP、CUDA Toolkit
-和 CUDA 版 PyTorch。Python 构建使用 Python 3.10 至 3.12。编译工具链与 PyTorch
-CUDA 版本保持兼容。
+和 CUDA 版 PyTorch。项目 wheel 构建流程使用 Python 3.10 至 3.12。编译工具链与
+PyTorch CUDA 版本保持兼容。
 
-以下命令从本仓库根目录执行：
+CPU 发布包支持浮点推理、MinMax/SQNR/Percentile 校准、PTQ、整数输入输出和 ONNX
+适配，不支持浮点训练或 QAT。使用 CPU 版 PyTorch 构建：
+
+```bash
+cmake -S . -B build_release -DCMAKE_BUILD_TYPE=Release -DRX_MET_ENABLE_CUDA=OFF
+cmake --build build_release --parallel 2
+RX_MET_ENABLE_CUDA=0 python3 -m pip install ./pytorch --no-deps --no-build-isolation
+```
+
+CPU 构建不需要 CUDA Toolkit，生成的 wheel 包含 CPU 原生共享库。使用时将模块和输入
+放在 CPU，校准和推理均要求 `eval()` 且在 `torch.no_grad()` 或 `torch.inference_mode()`
+上下文中调用；量化参数导入导出接口与 CUDA 包相同。自定义 CPU 构建目录时，安装前
+设置 `RX_MET_QUANT_GRU_BUILD_DIR` 为构建目录的绝对路径。
+ONNX Runtime 适配还需要构建时提供 C++ headers，可通过
+`QUANT_GRU_ONNXRUNTIME_INCLUDE` 指定其目录。
+
+CUDA 构建使用：
 
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -37,20 +54,6 @@ python3 -m pip install ./pytorch --no-deps --no-build-isolation
 CMake 生成 `pytorch/lib/libgru_quant_shared.so` 和 `build/gru_example`，pip 构建
 `gru_interface_binding` 扩展并安装 `quant_gru`。构建机器缺少可见 GPU 时，通过
 `CMAKE_CUDA_ARCHITECTURES` 和 `TORCH_CUDA_ARCH_LIST` 指定目标架构。
-
-CPU 包支持浮点推理、MinMax/SQNR/Percentile 校准、PTQ、整数输入输出和 ONNX
-适配，不支持浮点训练或 QAT。安装 CPU 版 PyTorch 后，在本仓库根目录执行：
-
-```bash
-cmake -S . -B build-cpu -DCMAKE_BUILD_TYPE=Release -DRX_MET_ENABLE_CUDA=OFF
-cmake --build build-cpu --parallel 2
-RX_MET_ENABLE_CUDA=0 python3 -m pip install ./pytorch --no-deps --no-build-isolation
-```
-
-CPU 构建不需要 CUDA Toolkit，wheel 包含 CPU 原生共享库。自定义构建目录时，通过
-`RX_MET_QUANT_GRU_BUILD_DIR` 指向其绝对路径。使用时将模块和输入放在 CPU，校准和
-推理均要求 `eval()` 且在 `torch.no_grad()` 或 `torch.inference_mode()` 上下文中调用；
-量化参数导入导出接口与 CUDA 包相同。
 
 ## 最小示例
 
@@ -111,11 +114,11 @@ clamp STE mask 截断；序列输出与最终隐藏状态的损失均遵循此�
 保证 FP32 缓存精度。标准 STE 反向继续使用反量化门值，未改为 LUT 的分段导数。
 底层 `ForwardPassQuantFP` 是保留的真实激活参考，不再是公共 QAT 前向。
 
-公共 AIMET 编码重载根据所有标准 scale 是否为精确 2 的幂恢复 Po2/affine 执行模式。
-锁定前会完成尚未执行的网格更新（例如 affine 切换 Po2），避免冻结旧 scale 与新执行
-模式的混合状态；若缺少用于推导新网格的校准数据则报错，保持未锁定。设计决策见
-[共享整数前向](docs/adr/0005-gru-shared-integer-forward.md)，回归见
-`tests/test_gru_carrier_contract.py`。
+公共 AIMET 编码重载根据所有标准 scale 是否为精确 2 的幂恢复 Po2/affine 执行模式，
+与 LSTM 的重载约定一致；不向编译器编码添加执行元数据。锁定前会完成尚未执行的网格
+更新（例如 affine 切换 Po2），避免冻结旧 scale 与新执行模式的混合状态；若缺少用于
+推导新网格的校准数据则报错，保持未锁定。验证见
+`tests/test_gru_carrier_contract.py` 的输出/缓存/mask/梯度和单向/双向重载对照。
 
 ## 保存与重载
 
@@ -169,14 +172,19 @@ gru.cuda()
 
 `pytorch/quant_gru_onnx.py` 提供标准 ONNX GRU 的输入适配，转换门顺序、方向、
 W/R/B 和输入输出布局，直接调用 QuantGRU 的校准、量化前向、Po2 与编码接口。
-`pytorch/lib/gru_onnx_runtime.cc` 负责 ONNX Runtime 与 Python 接口之间的张量传递，
+`pytorch/lib/gru_onnx_runtime.cc` 只负责 ONNX Runtime 与 Python 接口之间的张量传递，
 不实现门计算。CUDA 包的桥接经主机缓冲区调用原生 CUDA 算子，存在额外数据拷贝；
 CPU 包直接使用 CPU 原生算子。
 
-构建 Python 包前，通过 `QUANT_GRU_ONNXRUNTIME_INCLUDE` 指向 ONNX Runtime C++
-headers 目录，启用 `quant_gru_onnx_runtime` 扩展。支持 ONNX Runtime 1.20.1 及以上
-版本。没有 headers 时仍可构建仅用于 Torch 的 wheel，ONNX 输入校准会提示缺少
-运行时扩展。CPU 适配验证见 `tests/test_cpu_onnx.py`。
+RX-MET 的 `create_onnx_ptq_sim` 自动接入此能力，读取相同的 `GRU_config`。
+导出保存标准 GRU，双向参数编码按方向组合，内部编码沿用原生 schema。
+当前支持范围和验证见 rx-met 仓库中的 `docs/ONNX_PTQ_COMPILER.md` 和
+`tests/test_onnx_gru_native.py`。
+
+在 rx-met 中构建 wheel 时，仓库内的 ONNX Runtime 1.20.1 头文件用于构建
+`quant_gru_onnx_runtime` 扩展，支持本项目使用的 ONNX Runtime 1.20.1 及以上版本。
+独立构建需通过 `QUANT_GRU_ONNXRUNTIME_INCLUDE` 指定头文件目录；没有头文件时仍可
+构建仅用于 Torch 的 wheel，ONNX 输入校准会提示缺少运行时扩展。
 
 ## 接口与验证
 
@@ -191,27 +199,16 @@ headers 目录，启用 `quant_gru_onnx_runtime` 扩展。支持 ONNX Runtime 1.
 | `get_quant_config()`、`adjust_quant_config()` | 查询或调整指定算子的配置 |
 
 [示例脚本](pytorch/example/example_usage.py) 覆盖校准、QAT、双向计算、ONNX 导出和
-重载；[测试脚本](pytorch/test_quant_gru.py) 检查输出、梯度和误差阈值；
-[Speech Commands 真实网络测试](tests/real_network/README.md) 比较 PyTorch FP32、
-Native CUDA FP32、INT8 QAT 和 INT16 QAT。命令从仓库根执行：
+重载；[测试脚本](tests/test_quant_gru.py) 检查输出、梯度和误差阈值。命令从
+QuantGRU 目录执行：
 
 ```bash
 python3 pytorch/example/example_usage.py --list
 python3 pytorch/example/example_usage.py -e basic
-python3 pytorch/test_quant_gru.py
-python3 -m unittest tests.test_gru_clamp_chain_rule tests.test_gru_update_zero_point \
-  tests.test_gru_eval_backward tests.test_gru_carrier_contract tests.test_bias_headroom
-tests/real_network/run_speech_commands_gru_test.sh \
-  --dataset-root /path/to/speech_commands_v0.02
+python3 tests/test_quant_gru.py
 ```
 
-CPU 包的 PTQ 和 ONNX 回归需要 pytest、onnx、onnxruntime 及上述运行时扩展：
-
-```bash
-python3 -m pytest -q tests/test_cpu_ptq.py tests/test_cpu_onnx.py
-```
-
-示例脚本会捕获并打印异常，结果检查同时读取日志中的完成信息和错误信息。
+示例脚本会捕获并打印异常，运行失败时返回非零退出码。
 测试数据规模、位宽和通过阈值以测试脚本为准。
 
 ## 文档与源码
@@ -220,27 +217,23 @@ python3 -m pytest -q tests/test_cpu_ptq.py tests/test_cpu_onnx.py
 | --- | --- |
 | [pytorch/config/](pytorch/config/README.md) | JSON 字段、默认值和配置接口 |
 | [docs/GRU量化计算流程.md](docs/GRU量化计算流程.md) | 参数结构、逐算子公式、重缩放与 16 段 PWL |
-| [docs/research/](docs/research/speech-commands-gru-baseline.md) | 真实网络来源、适配边界和数据协议 |
-| [tests/real_network/](tests/real_network/README.md) | Speech Commands 四分支训练与量化精度回归 |
 | [quant-gru-cpu-only/](quant-gru-cpu-only/README.md) | 独立的 C++ CPU 定点参考实现 |
 | `include/`、`src/` | 主 C++/CUDA 计算、校准和 LUT 实现 |
 | `pytorch/` | Python 模块、扩展 binding 与使用示例 |
 | [CHANGELOG.md](CHANGELOG.md) | 组件版本与迁移记录 |
 
-## 许可证
-
-QuantGRU 使用 [Apache License 2.0](LICENSE)。项目包含源自
-[Haste](https://github.com/lmnt-com/haste) 的代码，并与
+项目使用的 GRU 实现源自 [Haste](https://github.com/lmnt-com/haste)，并与
 [PyTorch GRU 接口](https://pytorch.org/docs/stable/generated/torch.nn.GRU.html) 集成。
 
-## 固定 Bias 网格
+### 固定 bias 网格的训练余量
 
 新校准的输入/循环 bias 在各自粒度下，由观测到的最大绝对值建立 scale
 `max(2 * max_abs_bias, 0.01) / qmax`；Po2 模式再严格向上取整为 2 的幂。
 此策略将观测范围至少扩大一倍，并为零 bias 提供至少 ±0.01 的可训练区间。
 8 位下最小 affine 步长约 7.87e-5、Po2 步长约 1.22e-4，可表示 1e-4 量级的更新。
-MinMax、Percentile、SQNR 均对 bias 使用此规则，bias 不使用直方图裁剪或常数 bin
-扩展范围。已加载的编码与 QAT 期间的固定编码不会被扩张。
+位宽、对称零点和部署算术保持原有约定。MinMax、Percentile、SQNR 均对 bias 使用此规则；bias 不使用直方图裁剪或常数 bin 扩展范围。
 
-余量以较粗的 bias 分辨率为代价，不能保证任意学习率或训练时长都不饱和；应同时检查
+已加载的编码与 QAT 期间的固定编码不会被扩张。
+
+余量以较粗的 bias 分辨率为代价，不能保证任意学习率/训练时长都不饱和；应同时检查
 偏置饱和、梯度与任务指标。可加载经过独立验证的显式编码以采用其他范围策略。

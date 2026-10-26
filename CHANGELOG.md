@@ -6,33 +6,14 @@
 
 ## [Unreleased]
 
-### 功能
-
-- 新增不依赖 CUDA 的原生 CPU 浮点推理、校准、PTQ 和整数输入输出；CPU 模式要求
-  `eval()` 与 no-grad 上下文，不支持浮点训练或 QAT。
-- 新增标准 ONNX GRU 的原生算子适配及可选 ONNX Runtime 扩展。
-- 公共编码补充 `n` 元数据，循环输入输出按端口索引导出，并兼容旧格式加载。
-- 运行日志接入可选 AIMET 上下文，独立安装保留无 AIMET 依赖的日志回退。
-
 ### 文档
 
 - 按当前接口重写模块入口、配置说明和量化计算流程。
 - 合并 16 段 PWL 原理，移除历史二次 LUT 草稿和重复算法文档。
-- 修正独立仓库的源码与 CPU 参考构建路径。
-
-### 构建与验证
-
-- Docker 环境改用固定的 PyTorch 与 Python 依赖版本。
-- GitHub Actions 执行 CUDA 构建和 Python 扩展加载检查。
 
 ### 修复
 
 - 移除 CPU 参考构建中指向缺失 `example/test_runner.cc` 的目标，恢复默认 CMake 构建。
-- FP32/INT32 carrier 共用整数/LUT 前向，修正更新门非零 zero point 的隐藏状态更新。
-- 候选门和输入线性输出的 clamp mask 在上游、bias 梯度和跨 stream 消费前生效。
-- eval 模式在 autograd 启用时保存反向缓存，保持输入和参数梯度可用。
-- 默认所有量化点使用对称量化，新 bias 校准网格保留训练余量。
-- 锁定前同步待处理的网格更新，公共编码重载按实际 scale 恢复 Po2/affine 模式。
 
 ## [1.0.11] - 2026-07-16
 

@@ -462,7 +462,7 @@ encodings 组装。
 | [src/gru_forward_gpu_quant.cu](../src/gru_forward_gpu_quant.cu) | 整数存储前向 |
 | [src/gru_forward_gpu_quant_fp.cu](../src/gru_forward_gpu_quant_fp.cu) | float32 存储量化前向 |
 | [src/gru_backward_gpu_quant.cu](../src/gru_backward_gpu_quant.cu) | 量化训练反向 |
-| [pytorch/test_quant_gru.py](../pytorch/test_quant_gru.py) | 输出、梯度和误差检查 |
+| [tests/test_quant_gru.py](../tests/test_quant_gru.py) | 输出、梯度和误差检查 |
 
 [独立 CPU 参考实现](../quant-gru-cpu-only/README.md) 使用自身的 `shift_*` 参数结构。
 主实现与该参考实现的数值一致性需要在统一输入、权重和量化参数后单独验证。
